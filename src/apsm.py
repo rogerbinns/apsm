@@ -3,6 +3,8 @@
 import sys
 import logging
 import collections
+import json
+import copy
 
 import requests  # apt install python3-requests
 
@@ -55,29 +57,153 @@ def cli_import(options):
 
     configs = []
     for endpoint in options.endpoints:
-        logging.info(f"Checking to { endpoint }")
+        logging.info(f"Checking { endpoint }")
         ep = EndPoint(keys, endpoint)
-        try:
-            ep.ping()
-            configs.append({
-                "id": ep.status()["myID"],
-                "config": ep.get_config()
-            })
-        except Exception:
-            logging.exception("Failed with { endpoint }")
-            raise
+        ep.ping()
+        configs.append({"id": ep.status()["myID"], "config": ep.get_config()})
 
     cfg = {"devices": {}, "folders": {}}
 
     for config in configs:
         for device in config["config"]["devices"]:
-            did = device["deviceId"]
+            did = device["deviceID"]
             if did not in cfg["devices"]:
-                cfg["devices"] = {"name": collections.Counter()}
-            cfg["devices"][did]["name"][device["name"]]
+                cfg["devices"][did] = {"name": collections.Counter()}
+            cfg["devices"][did]["name"][device["name"]] += 1
 
-    import pdb
-    pdb.set_trace()
+        for folder in config["config"]["folders"]:
+            fid = folder["id"]
+            if fid not in cfg["folders"]:
+                cfg["folders"][fid] = {
+                    "label": collections.Counter(),
+                    "devices": collections.Counter()
+                }
+            cfg["folders"][fid]["label"][folder["label"]] += 1
+            for device in folder["devices"]:
+                cfg["folders"][fid]["devices"][device["deviceID"]] += 1
+
+    cfg = gen_config(cfg)
+
+    if options.base_config:
+        base = json.load(options.base_config)
+        cfg = merge_config(base, cfg)
+
+    print(json.dumps(cfg, sort_keys=True, indent=4))
+
+
+def gen_config(cfg):
+    deviceid_to_name = {}
+
+    devices = {}
+    folders = {}
+    blacklist = {"devices": [], "folders": []}
+
+    for did, d in cfg["devices"].items():
+        n = d["name"].most_common()
+        if not n[0][0]:
+            blacklist["devices"].append(did)
+            continue
+        assert n[0][0] not in devices  # duplicate names
+        devices[n[0][0]] = {"id": did}
+        deviceid_to_name[did] = n[0][0]
+        if len(n) > 1:
+            devices[n[0][0]]["# other names"] = [l[0] for l in n[1:]]
+
+    for fid, f in cfg["folders"].items():
+        n = f["label"].most_common()
+        assert n[0][0] not in folders
+        rec = {"id": fid, "sync": [], "sync-off": []}
+        if len(n) > 1:
+            rec["# other names"] = [l[0] for l in n[1:]]
+        for did, count in f["devices"].most_common():
+            if did not in blacklist["devices"]:
+                rec["sync"].append(deviceid_to_name[did])
+        for name in deviceid_to_name.values():
+            if name not in rec["sync"]:
+                rec["sync-off"].append(name)
+        if not rec["sync"]:
+            blacklist["folders"].append(fid)
+        else:
+            folders[n[0][0]] = rec
+
+    return {"devices": devices, "folders": folders, "blacklist": blacklist}
+
+
+def merge_config(base, cfg):
+    res = copy.deepcopy(base)
+    cfg = copy.deepcopy(cfg)
+
+    for n in "devices", "blacklist", "folders":
+        if n not in res:
+            res[n] = dict()
+        assert isinstance(res[n], dict)
+
+    for name, device in cfg["devices"].items():
+        best = None
+        for rname, rdevice in res["devices"].items():
+            if rdevice.get("id") == device["id"]:
+                best = rdevice
+                break
+        else:
+            if name in res["devices"]:
+                best = res["devices"][name]
+            else:
+                res["devices"][name] = device
+                continue
+        best.update(device)
+
+    for name, folder in cfg["folders"].items():
+        best = None
+        for rname, rfolder in res["folders"].items():
+            if rfolder.get("id") == folder["id"]:
+                best = rfolder
+                break
+        else:
+            if name in res["folders"]:
+                best = res["folders"][name]
+            else:
+                res["folders"][name] = folder
+                continue
+
+        sync = folder.pop("sync")
+        sync_off = folder.pop("sync-off")
+        best.update(folder)
+        for n in "sync", "sync-off":
+            if n not in best:
+                best[n] = []
+
+        for s in sync:
+            if s not in best["sync"]:
+                best["sync"].append(s)
+
+        for s in sync_off:
+            if s not in best["sync"] and s not in best["sync-off"]:
+                best["sync-off"].append(s)
+
+    device_names = [
+        name for name, device in cfg["devices"].items() if device.get("id")
+    ]
+
+    # ::TODO:: blacklist
+
+    for fname, folder in res["folders"].items():
+        remove = []
+        if "sync-on" not in folder:
+            continue
+        for dname in folder["sync-off"]:
+            if dname in folder["sync"]:
+                remove.append(dname)
+        for dname in remove:
+            folder["sync-off"].remove(dname)
+
+        for dname in device_names:
+            if dname not in folder["sync"] and dname not in folder["sync-off"]:
+                folder["sync-off"].append(dname)
+
+        for k in "sync", "sync-off":
+            folder[k].sort()
+
+    return res
 
 
 if __name__ == '__main__':
@@ -90,8 +216,14 @@ if __name__ == '__main__':
                    help="Set the logging level")
     subs = p.add_subparsers()
 
-    s = subs.add_parser("import", help="Import configs from devices")
+    s = subs.add_parser(
+        "import", help="Import configs from devices, printing json to stdout")
     s.set_defaults(func=cli_import)
+    s.add_argument(
+        "--base-config",
+        help=
+        "File with existing config.  Output will update this with new info",
+        type=argparse.FileType("rb"))
     s.add_argument("api_keys_file",
                    help="File to get api keys from, one per line",
                    type=argparse.FileType("rt"))
