@@ -296,7 +296,27 @@ def cli_rename(options):
 
 
 def cli_orphans(options):
-    pass
+    keys = read_api_keys(options.api_keys_file)
+    ep = EndPoint(keys, options.endpoint)
+    ep.ping()
+
+    config = ep.get_config()
+
+    used = set()
+    dirs = set()
+
+    for folder in config["folders"]:
+        dirs.add(os.path.dirname(folder["path"]))
+        used.add(folder["path"].rstrip("/"))
+
+    if options.directories:
+        dirs.update(options.directories)
+
+    for folder in sorted(dirs):
+        for d in os.listdir(folder):
+            dd = opj(folder, d)
+            if os.path.isdir(opj(dd, ".stfolder")) and not dd in used:
+                print(dd)
 
 
 def run(cmd, **kwargs):
@@ -339,8 +359,13 @@ if __name__ == '__main__':
     s = subs.add_parser("orphans",
                         help="Find local folders no longer referenced")
     s.set_defaults(func=cli_orphans)
-    s.add_argument("--directory", help="Addiitonal directories to check")
-
+    s.add_argument("api_keys_file",
+                   help="File to get api keys from, one per line",
+                   type=argparse.FileType("rt"))
+    s.add_argument("endpoint", help="ipaddr:port ")
+    s.add_argument("directories",
+                   nargs=argparse.REMAINDER,
+                   help="Addiitonal directories to check")
     options = p.parse_args()
 
     try:
