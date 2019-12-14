@@ -143,15 +143,12 @@ def gen_config(cfg):
     for fid, f in cfg["folders"].items():
         n = f["label"].most_common()
         assert n[0][0] not in folders
-        rec = {"id": fid, "sync": [], "sync-off": []}
+        rec = {"id": fid, "sync": []}
         if len(n) > 1:
             rec["# other names"] = [l[0] for l in n[1:]]
         for did, count in f["devices"].most_common():
             if did not in blacklist["devices"]:
                 rec["sync"].append(deviceid_to_name[did])
-        for name in deviceid_to_name.values():
-            if name not in rec["sync"]:
-                rec["sync-off"].append(name)
         if not rec["sync"]:
             blacklist["folders"].append(fid)
         else:
@@ -197,9 +194,8 @@ def merge_config(base, cfg):
                 continue
 
         sync = folder.pop("sync")
-        sync_off = folder.pop("sync-off")
         best.update(folder)
-        for n in "sync", "sync-off":
+        for n in ("sync", ):
             if n not in best:
                 best[n] = []
 
@@ -214,8 +210,6 @@ def merge_config(base, cfg):
     device_names = [
         name for name, device in cfg["devices"].items() if device.get("id")
     ]
-
-    # ::TODO:: blacklist
 
     for fname, folder in res["folders"].items():
         remove = []
