@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import logging
 import collections
 import json
 import copy
+import time
+import subprocess
 
 import requests  # apt install python3-requests
+
+opj = os.path.join
 
 
 class EndPoint:
@@ -22,7 +27,7 @@ class EndPoint:
         url = f"{self.endpoint}{uri}"
         for a in range(len(self.api_keys)):
             r = requests.get(url, headers={"X-API-Key": self.api_keys[a]})
-            if r.status_code != 200:
+            if r.status_code == 403:
                 continue
             if a != 0:
                 ak = self.api_keys
@@ -33,11 +38,39 @@ class EndPoint:
                 f"Unable to connect to { url } after trying { len(self.api_keys()) } keys"
             )
 
+    def _post(self, uri, data=None):
+        url = f"{self.endpoint}{uri}"
+        for a in range(len(self.api_keys)):
+            r = requests.post(url,
+                              data=data,
+                              headers={"X-API-Key": self.api_keys[a]})
+            if r.status_code == 403:
+                continue
+            if a != 0:
+                ak = self.api_keys
+                self.api_keys = [ak[a]] + ak[:a] + ak[a + 1:]
+            if r.status_code != 200:
+                raise Exception(r.text)
+            return
+        else:
+            raise Exception(
+                f"Unable to connect to { url } after trying { len(self.api_keys()) } keys"
+            )
+
     def get_config(self):
         return self._get("/rest/system/config")
 
     def status(self):
         return self._get("/rest/system/status")
+
+    def pause(self):
+        self._post("/rest/system/pause")
+
+    def restart(self):
+        self._post("/rest/system/restart")
+
+    def update_config(self, config):
+        self._post("/rest/system/config", json.dumps(config).encode("utf8"))
 
 
 def read_api_keys(f) -> list:
@@ -51,9 +84,7 @@ def read_api_keys(f) -> list:
 
 
 def cli_import(options):
-    logging.info("Reading api keys")
     keys = read_api_keys(options.api_keys_file)
-    logging.debug(f"api keys { keys }")
 
     configs = []
     for endpoint in options.endpoints:
@@ -206,6 +237,73 @@ def merge_config(base, cfg):
     return res
 
 
+def cli_rename(options):
+    keys = read_api_keys(options.api_keys_file)
+    ep = EndPoint(keys, options.endpoint)
+    ep.ping()
+
+    config = ep.get_config()
+
+    for folder in config["folders"]:
+        label = folder["label"]
+        path = folder["path"]
+
+        path = path.rstrip("/")
+
+        if os.path.basename(path) == label:
+            continue
+        print(label, folder["id"], path)
+        existing_folder = os.path.dirname(path)
+        res = input(f"[{ opj(existing_folder, label)}] y/alt > ").strip()
+        if not res:
+            print()
+            continue
+        if res == "y":
+            res = opj(existing_folder, label)
+        if "/" not in res:
+            res = opj(existing_folder, res)
+        newfolder = os.path.dirname(res)
+        if existing_folder != newfolder:
+            print(f"  !!! Folder canged to { newfolder }")
+        check = input(f"Confirm rename to { res }? Y/n ").strip()
+        if check != "Y":
+            print("Not doing rename")
+            continue
+
+        for checkf in config["folders"]:
+            if checkf["path"] == res:
+                print("Path already used by", checkf["id"], checkf["label"])
+                sys.exit(5)
+
+        if os.path.exists(res):
+            sys.exit(f"Destination { res } already exists")
+
+        print("Pausing syncthing")
+        ep.pause()
+        try:
+            run(["mv", path, res])
+            folder["path"] = res
+            ep.update_config(config)
+        except Exception:
+            logging.exception(
+                "Syncthing still paused and config / filesystem inconsistent.  Giving up"
+            )
+            raise
+
+        print("Restarting synthing")
+        ep.restart()
+        print()
+
+
+def cli_orphans(options):
+    pass
+
+
+def run(cmd, **kwargs):
+    print(f">>> { cmd }")
+    subprocess.check_call(cmd, **kwargs)
+
+
 if __name__ == '__main__':
     import argparse
 
@@ -232,8 +330,16 @@ if __name__ == '__main__':
                    help="list of endpoints ipaddr:port")
 
     s = subs.add_parser("rename", help="Renames local folders to match labels")
+    s.set_defaults(func=cli_rename)
+    s.add_argument("api_keys_file",
+                   help="File to get api keys from, one per line",
+                   type=argparse.FileType("rt"))
+    s.add_argument("endpoint", help="ipaddr:port ")
 
-    s = subs.add_parser("orphans", help="Find local folders no longer used")
+    s = subs.add_parser("orphans",
+                        help="Find local folders no longer referenced")
+    s.set_defaults(func=cli_orphans)
+    s.add_argument("--directory", help="Addiitonal directories to check")
 
     options = p.parse_args()
 
