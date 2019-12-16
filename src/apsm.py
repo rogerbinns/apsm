@@ -6,8 +6,8 @@ import logging
 import collections
 import json
 import copy
-import time
 import subprocess
+import time
 
 import requests  # apt install python3-requests
 
@@ -263,9 +263,19 @@ def cli_rename(options):
         if os.path.exists(res):
             sys.exit(f"Destination { res } already exists")
 
-        print("Pausing syncthing")
+        print("Pausing all syncthing devices")
         ep.pause()
+        print("Pausing folder")
+        cfg_paused = copy.deepcopy(config)
+        for candidate in cfg_paused["folders"]:
+            if candidate["id"] == folder["id"]:
+                candidate["paused"] = True
+                break
+        else:
+            raise Exception("Couldn't find our folder")  # coding error
         try:
+            ep.update_config(cfg_paused)
+            time.sleep(1)
             run(["mv", path, res])
             folder["path"] = res
             ep.update_config(config)
