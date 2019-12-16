@@ -34,9 +34,9 @@ class EndPoint:
                 self.api_keys = [ak[a]] + ak[:a] + ak[a + 1:]
             return r.json()
         else:
-            raise Exception(
-                f"Unable to connect to { url } after trying { len(self.api_keys()) } keys"
-            )
+            txt = f"Unable to connect to { url } after trying { len(self.api_keys()) } keys"
+            logging.info(txt)
+            raise Exception(txt)
 
     def _post(self, uri, data=None):
         url = f"{self.endpoint}{uri}"
