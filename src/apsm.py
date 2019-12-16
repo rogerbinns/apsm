@@ -215,17 +215,8 @@ def merge_config(base, cfg):
         remove = []
         if "sync-on" not in folder:
             continue
-        for dname in folder["sync-off"]:
-            if dname in folder["sync"]:
-                remove.append(dname)
-        for dname in remove:
-            folder["sync-off"].remove(dname)
 
-        for dname in device_names:
-            if dname not in folder["sync"] and dname not in folder["sync-off"]:
-                folder["sync-off"].append(dname)
-
-        for k in "sync", "sync-off":
+        for k in ("sync", ):
             folder[k].sort()
 
     return res
