@@ -203,10 +203,6 @@ def merge_config(base, cfg):
             if s not in best["sync"]:
                 best["sync"].append(s)
 
-        for s in sync_off:
-            if s not in best["sync"] and s not in best["sync-off"]:
-                best["sync-off"].append(s)
-
     device_names = [
         name for name, device in cfg["devices"].items() if device.get("id")
     ]
