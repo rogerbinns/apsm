@@ -310,6 +310,44 @@ def cli_orphans(options):
                 print(dd)
 
 
+def cli_verify(options):
+    target = json.load(options.config)
+    verify_target(target)
+
+
+def verify_target(target):
+    devices = target["devices"].keys()
+    used_devices = set()
+
+    nosuchdev = collections.Counter()
+
+    for name, folder in target["folders"].items():
+        if not folder.get("id"):
+            print(f"No id specified for folder { name }")
+            continue
+        if not folder.get("sync"):
+            print(f"No syncs specified for folder { name }")
+            continue
+        dev_exists = 0
+        for dev in folder["sync"]:
+            if dev not in devices:
+                nosuchdev[dev] += 1
+            else:
+                used_devices.add(dev)
+                dev_exists += 1
+        if not dev_exists:
+            print(f"Folder { name } doesn't have any known devices syncing")
+
+    if nosuchdev:
+        print("Unknown devices in folder syncs but no device & id")
+        print(nosuchdev.most_common())
+
+    not_used=set(devices)-used_devices
+    if not_used:
+        print("Devices defined but not used")
+        print(not_used)
+
+
 def run(cmd, **kwargs):
     print(f">>> { cmd }")
     subprocess.check_call(cmd, **kwargs)
@@ -339,6 +377,12 @@ if __name__ == '__main__':
     s.add_argument("endpoints",
                    nargs="+",
                    help="list of endpoints ipaddr:port")
+
+    s = subs.add_parser("verify", help="Check json config consistency")
+    s.set_defaults(func=cli_verify)
+    s.add_argument("config",
+                   help="File with desired json config",
+                   type=argparse.FileType("rb"))
 
     s = subs.add_parser("rename", help="Renames local folders to match labels")
     s.set_defaults(func=cli_rename)
