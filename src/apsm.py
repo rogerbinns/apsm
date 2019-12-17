@@ -261,9 +261,11 @@ def cli_rename(options):
                 break
         else:
             raise Exception("Couldn't find our folder")  # coding error
+
+        make_backup(options, ep)
         try:
             ep.update_config(cfg_paused)
-            time.sleep(1)
+            time.sleep(1)  # give time for backup timestamp to increment
             run(["mv", path, res])
             folder["path"] = res
             ep.update_config(config)
@@ -324,6 +326,7 @@ def cli_update(options):
             for a in actions:
                 print("   ", a)
             if ask_yes_no("Proceed"):
+                make_backup(options, ep)
                 ep.update_config(new_config)
                 ep.restart()
         else:
@@ -510,6 +513,33 @@ def verify_target(target):
         print(not_used)
 
 
+def cli_restore(options):
+    keys = read_api_keys(options.api_keys_file)
+    ep = EndPoint(keys, options.endpoint)
+    ep.ping()
+
+    id = ep.status()["myID"]
+    if id not in options.config:
+        sys.exit(
+            f"""Device id is { id }\nNot restoring because that id needs to be in filename"""
+        )
+    config = json.load(open(options.config, "rt"))
+    make_backup(options, ep)
+    ep.update_config(config)
+
+
+def make_backup(options, ep):
+    config = ep.get_config()
+    id = ep.status()["myID"]
+    if not os.path.isdir(options.backup_directory):
+        os.makedirs(options.backup_directory)
+    with open(
+            opj(options.backup_directory,
+                f"config-{ id }-{ time.strftime('%Y%m%d-%H%m') }.json"),
+            "wt") as f:
+        json.dump(config, f, indent=4, sort_keys=True)
+
+
 def run(cmd, **kwargs):
     print(f">>> { cmd }")
     subprocess.check_call(cmd, **kwargs)
@@ -542,6 +572,11 @@ if __name__ == '__main__':
     p.add_argument("--log-level",
                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                    help="Set the logging level")
+
+    p.add_argument("--backup-directory",
+                   default=os.path.expanduser("~/.config/apsm"),
+                   help="Directory for backup of configs [%(default)s]")
+
     subs = p.add_subparsers()
 
     s = subs.add_parser(
@@ -595,6 +630,14 @@ if __name__ == '__main__':
                    nargs=argparse.REMAINDER,
                    help="Addiitonal directories to check")
     options = p.parse_args()
+
+    s = subs.add_parser("restore", help="Restore backup config")
+    s.set_defaults(func=cli_restore)
+    s.add_argument("config", help="filename with json to restore")
+    s.add_argument("api_keys_file",
+                   help="File to get api keys from, one per line",
+                   type=argparse.FileType("rt"))
+    s.add_argument("endpoint", help="ipaddr:port ")
 
     try:
         if options.log_level:
