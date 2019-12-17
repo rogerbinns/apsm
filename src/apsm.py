@@ -140,7 +140,8 @@ def gen_config(cfg):
 
     for fid, f in cfg["folders"].items():
         n = f["label"].most_common()
-        assert n[0][0] not in folders
+        while n[0][0] in folders:
+            n[0][0] += "_"
         rec = {"id": fid, "sync": []}
         if len(n) > 1:
             rec["# other names"] = [l[0] for l in n[1:]]
