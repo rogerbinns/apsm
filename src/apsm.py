@@ -127,12 +127,10 @@ def gen_config(cfg):
 
     devices = {}
     folders = {}
-    blacklist = {"devices": [], "folders": []}
 
     for did, d in cfg["devices"].items():
         n = d["name"].most_common()
         if not n[0][0]:
-            blacklist["devices"].append(did)
             continue
         assert n[0][0] not in devices  # duplicate names
         devices[n[0][0]] = {"id": did}
@@ -146,15 +144,12 @@ def gen_config(cfg):
         rec = {"id": fid, "sync": []}
         if len(n) > 1:
             rec["# other names"] = [l[0] for l in n[1:]]
-        for did, count in f["devices"].most_common():
-            if did not in blacklist["devices"]:
-                rec["sync"].append(deviceid_to_name[did])
-        if not rec["sync"]:
-            blacklist["folders"].append(fid)
-        else:
+        for did, _ in f["devices"].most_common():
+            rec["sync"].append(deviceid_to_name[did])
+        if rec["sync"]:
             folders[n[0][0]] = rec
 
-    return {"devices": devices, "folders": folders, "blacklist": blacklist}
+    return {"devices": devices, "folders": folders}
 
 
 def merge_config(base, cfg):
@@ -168,7 +163,7 @@ def merge_config(base, cfg):
 
     for name, device in cfg["devices"].items():
         best = None
-        for rname, rdevice in res["devices"].items():
+        for rdevice in res["devices"].values():
             if rdevice.get("id") == device["id"]:
                 best = rdevice
                 break
@@ -202,10 +197,6 @@ def merge_config(base, cfg):
         for s in sync:
             if s not in best["sync"]:
                 best["sync"].append(s)
-
-    device_names = [
-        name for name, device in cfg["devices"].items() if device.get("id")
-    ]
 
     for folder in res["folders"].values():
         if "sync" not in folder:
