@@ -305,6 +305,123 @@ def cli_orphans(options):
                 print(dd)
 
 
+def cli_update(options):
+    keys = read_api_keys(options.api_keys_file)
+
+    target = json.load(options.config)
+
+    for endpoint in options.endpoints:
+        ep = EndPoint(keys, endpoint)
+        ep.ping()
+        config = ep.get_config()
+        status = ep.status()
+        actions, new_config = get_update(options, config, target,
+                                         status["myID"], status["tilde"])
+        if new_config and new_config != config:
+            print("Updating", name_from_id(target, status["myID"]))
+            for a in actions:
+                print("   ", a)
+            if ask_yes_no("Proceed"):
+                ep.update_config(new_config)
+                ep.restart()
+            print()
+
+
+def name_from_id(target, id) -> str:
+    for name, device in target["devices"].items():
+        if device.get("id") == id:
+            return name
+    return f"Device Id { id }"
+
+
+def get_update(options, config, target, myid, tilde):
+    actions = []
+    res = copy.deepcopy(config)
+
+    def name_to_id(name):
+        dev = target["devices"].get(name)
+        if dev and "id" in dev:
+            return dev["id"]
+        return None
+
+    def id_to_name(id):
+        for name, dev in target["devices"].items():
+            if dev and "id" in dev and dev["id"] == id:
+                return name
+        return None
+
+    def id_to_label(id):
+        for name, folder in target["folders"].items():
+            if folder and "id" in folder and folder["id"] == id:
+                return name
+        return None
+
+    def id_to_folder(id):
+        for folder in target["folders"].values():
+            if folder and "id" in folder and folder["id"] == id:
+                return folder
+        return None
+
+    def id_to_device(id):
+        for dev in target["devices"].values():
+            if dev and "id" in dev and dev["id"] == id:
+                return dev
+        return None
+
+    has_ids = set()
+    for i in range(len(res["devices"]) - 1, -1, -1):
+        rec = res["devices"][i]
+        if not id_to_device(rec["deviceID"]):
+            actions.append(f"Remove device id { rec['deviceID']}")
+            del res["devices"][i]
+            continue
+
+        has_ids.add(rec["deviceID"])
+
+        name = id_to_name(rec["deviceID"])
+        if rec["name"] != name:
+            actions.append(f"Updated name for { name }")
+            res[i]["name"] = name
+
+    for n in target["devices"]:
+        id = name_to_id(n)
+        if id and id not in has_ids:
+            actions.append(f"Add device { n } id { id }")
+            res["devices"].append({"deviceID": id, 'name': n})
+
+    # now folders
+    has_ids = set()
+
+    CORRECT DEVICES PER FOLDER
+
+    for i in range(len(res["folders"]) - 1, -1, -1):
+        rec = res["folders"][i]
+        if not id_to_folder(rec["id"]):
+            actions.append(
+                f"Remove folder id { rec['id']} path { rec ['path'] }")
+            del res["folders"][i]
+            continue
+
+        has_ids.add(rec["id"])
+
+        label = id_to_label(rec["id"])
+        if rec["label"] != label:
+            actions.append(f"Updated label for { label }")
+            rec["label"] = label
+
+    for label, folder in target["folders"].items():
+        if "id" not in folder:
+            continue
+        id=folder["id"]
+        if id not in has_ids:
+            print("Adding folder { label }")
+            path=ask_folder(opj(tilde, label), tilde, label)
+            actions.append(f"Add folder { label } id { id } at { path }")
+            res["folders"].append({"id": id, 'label': label, 'path': path})
+
+    return actions, res
+
+
 def cli_verify(options):
     target = json.load(options.config)
     verify_target(target)
@@ -337,7 +454,7 @@ def verify_target(target):
         print("Unknown devices in folder syncs but no device & id")
         print(nosuchdev.most_common())
 
-    not_used=set(devices)-used_devices
+    not_used = set(devices) - used_devices
     if not_used:
         print("Devices defined but not used")
         print(not_used)
@@ -384,6 +501,18 @@ if __name__ == '__main__':
         help=
         "File with existing config.  Output will update this with new info",
         type=argparse.FileType("rb"))
+    s.add_argument("api_keys_file",
+                   help="File to get api keys from, one per line",
+                   type=argparse.FileType("rt"))
+    s.add_argument("endpoints",
+                   nargs="+",
+                   help="list of endpoints ipaddr:port")
+
+    s = subs.add_parser("update", help="Update devices from json config")
+    s.set_defaults(func=cli_update)
+    s.add_argument("config",
+                   help="File with desired json config",
+                   type=argparse.FileType("rb"))
     s.add_argument("api_keys_file",
                    help="File to get api keys from, one per line",
                    type=argparse.FileType("rt"))
