@@ -396,7 +396,7 @@ def get_update(options, config, target, myid, tilde):
         name = id_to_name(rec["deviceID"])
         if rec["name"] != name:
             actions.append(f"Updated name for { name }")
-            res[i]["name"] = name
+            res["devices"][i]["name"] = name
 
     for n in target["devices"]:
         id = name_to_id(n)
