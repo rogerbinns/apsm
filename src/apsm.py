@@ -235,8 +235,8 @@ def cli_rename(options):
             continue
         print(label, folder["id"], path)
         existing_folder = os.path.dirname(path)
-        res=ask_folder(path)
-        if res==path:
+        res = ask_folder(path)
+        if res == path:
             continue
         newfolder = os.path.dirname(res)
         if existing_folder != newfolder:
@@ -315,8 +315,13 @@ def cli_update(options):
         ep.ping()
         config = ep.get_config()
         status = ep.status()
+
+        print("==== Processing", name_from_id(target, status["myID"]))
+
+        tilde = status["tilde"]
+        defpath = config["options"]["defaultFolderPath"].replace("~", tilde)
         actions, new_config = get_update(options, config, target,
-                                         status["myID"], status["tilde"])
+                                         status["myID"], defpath)
         if new_config and new_config != config:
             print("Updating", name_from_id(target, status["myID"]))
             for a in actions:
@@ -324,7 +329,10 @@ def cli_update(options):
             if ask_yes_no("Proceed"):
                 ep.update_config(new_config)
                 ep.restart()
-            print()
+        else:
+            print("No changes for", name_from_id(target, status["myID"]))
+
+        print()
 
 
 def name_from_id(target, id) -> str:
@@ -350,6 +358,10 @@ def get_update(options, config, target, myid, tilde):
                 return name
         return None
 
+    def id_to_pretty_name(id):
+        n = id_to_name(id)
+        return n if n else f"id {id}"
+
     def id_to_label(id):
         for name, folder in target["folders"].items():
             if folder and "id" in folder and folder["id"] == id:
@@ -368,11 +380,22 @@ def get_update(options, config, target, myid, tilde):
                 return dev
         return None
 
+    def device_ids_for_folder(id):
+        folder = id_to_folder(id)
+        if not folder: return None
+        dev_ids = set()
+        for dev in folder.get("sync", []):
+            i = name_to_id(dev)
+            if i:
+                dev_ids.add(i)
+        return sorted(dev_ids)
+
     has_ids = set()
     for i in range(len(res["devices"]) - 1, -1, -1):
         rec = res["devices"][i]
         if not id_to_device(rec["deviceID"]):
-            actions.append(f"Remove device id { rec['deviceID']}")
+            actions.append(
+                f"Remove device { id_to_pretty_name(rec['deviceID']) }")
             del res["devices"][i]
             continue
 
@@ -386,13 +409,10 @@ def get_update(options, config, target, myid, tilde):
     for n in target["devices"]:
         id = name_to_id(n)
         if id and id not in has_ids:
-            actions.append(f"Add device { n } id { id }")
+            actions.append(f"Add device { id_to_pretty_name(id) }")
             res["devices"].append({"deviceID": id, 'name': n})
 
-    # now folders
     has_ids = set()
-
-    CORRECT DEVICES PER FOLDER
 
     for i in range(len(res["folders"]) - 1, -1, -1):
         rec = res["folders"][i]
@@ -409,15 +429,48 @@ def get_update(options, config, target, myid, tilde):
             actions.append(f"Updated label for { label }")
             rec["label"] = label
 
+        sync_ids = device_ids_for_folder(rec["id"])
+        have = set()
+        syncs = []
+        for s in rec["devices"]:
+            if s["deviceID"] in sync_ids:
+                syncs.append(s)
+                have.add(s["deviceID"])
+                continue
+            else:
+                actions.append(
+                    "Remove device %s from folder %s" %
+                    (id_to_pretty_name(s["deviceID"]), id_to_label(rec["id"])))
+
+        for s in sync_ids:
+            if s not in have:
+                actions.append("Added device %s to folder %s" %
+                               (id_to_name(s), id_to_label(rec["id"])))
+                syncs.append({"deviceID": s})
+
+        rec["devices"] = syncs
+
     for label, folder in target["folders"].items():
         if "id" not in folder:
             continue
-        id=folder["id"]
+        id = folder["id"]
         if id not in has_ids:
-            print("Adding folder { label }")
-            path=ask_folder(opj(tilde, label), tilde, label)
-            actions.append(f"Add folder { label } id { id } at { path }")
-            res["folders"].append({"id": id, 'label': label, 'path': path})
+            syncs = device_ids_for_folder(folder["id"])
+            if not syncs:
+                continue
+            print(f"Adding folder { label } with { len(syncs) } devices")
+            path = ask_folder(opj(tilde, label), tilde, label)
+            actions.append(
+                f"Add folder { label } id { id } at { path } ({ len(syncs) } devices)"
+            )
+            res["folders"].append({
+                "id": id,
+                'label': label,
+                'path': path,
+                "devices": [{
+                    "deviceID": id
+                } for id in syncs]
+            })
 
     return actions, res
 
@@ -469,16 +522,17 @@ def ask_yes_no(question, default=False):
     r = input(f"{ question } y/N? ")
     return True if r.strip() == "Y" else default
 
+
 def ask_folder(value, basedir=None, label=None):
-    basedir=basedir or os.path.dirname(value)
-    label=label or os.path.basename(value)
-    
+    basedir = basedir or os.path.dirname(value)
+    label = label or os.path.basename(value)
+
     while True:
-        res=input(f"[{ value }] ? ").strip()
+        res = input(f"[{ value }] ? ").strip()
         if not res:
             return value
         if '/' not in res:
-            value=opj(basedir, res)
+            value = opj(basedir, res)
             continue
         return res
 
