@@ -207,13 +207,10 @@ def merge_config(base, cfg):
         name for name, device in cfg["devices"].items() if device.get("id")
     ]
 
-    for fname, folder in res["folders"].items():
-        remove = []
-        if "sync-on" not in folder:
+    for folder in res["folders"].values():
+        if "sync" not in folder:
             continue
-
-        for k in ("sync", ):
-            folder[k].sort()
+        folder["sync"].sort()
 
     return res
 
