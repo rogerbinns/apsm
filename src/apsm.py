@@ -422,6 +422,12 @@ def get_update(options, config, target, myid, tilde):
             rec["label"] = label
 
         sync_ids = device_ids_for_folder(rec["id"])
+
+        if myid not in sync_ids:
+            actions.append(f"Remove folder id { rec['id'] } label { label } because I do not sync it")
+            del res["folders"][i]
+            continue
+
         have = set()
         syncs = []
         for s in rec["devices"]:
@@ -448,7 +454,7 @@ def get_update(options, config, target, myid, tilde):
         id = folder["id"]
         if id not in has_ids:
             syncs = device_ids_for_folder(folder["id"])
-            if not syncs:
+            if not syncs or myid not in syncs:
                 continue
             print(f"Adding folder { label } with { len(syncs) } devices")
             path = ask_folder(opj(tilde, label), tilde, label)
