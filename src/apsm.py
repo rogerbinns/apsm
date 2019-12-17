@@ -235,17 +235,12 @@ def cli_rename(options):
             continue
         print(label, folder["id"], path)
         existing_folder = os.path.dirname(path)
-        res = input(f"[{ opj(existing_folder, label)}] y/alt > ").strip()
-        if not res:
-            print()
+        res=ask_folder(path)
+        if res==path:
             continue
-        if res == "y":
-            res = opj(existing_folder, label)
-        if "/" not in res:
-            res = opj(existing_folder, res)
         newfolder = os.path.dirname(res)
         if existing_folder != newfolder:
-            print(f"  !!! Folder canged to { newfolder }")
+            print(f"  !!! Folder changed to { newfolder }")
         check = input(f"Confirm rename to { res }? Y/n ").strip()
         if check != "Y":
             print("Not doing rename")
@@ -351,6 +346,24 @@ def verify_target(target):
 def run(cmd, **kwargs):
     print(f">>> { cmd }")
     subprocess.check_call(cmd, **kwargs)
+
+
+def ask_yes_no(question, default=False):
+    r = input(f"{ question } y/N? ")
+    return True if r.strip() == "Y" else default
+
+def ask_folder(value, basedir=None, label=None):
+    basedir=basedir or os.path.dirname(value)
+    label=label or os.path.basename(value)
+    
+    while True:
+        res=input(f"[{ value }] ? ").strip()
+        if not res:
+            return value
+        if '/' not in res:
+            value=opj(basedir, res)
+            continue
+        return res
 
 
 if __name__ == '__main__':
