@@ -283,8 +283,9 @@ def cli_orphans(options):
     dirs = set()
 
     for folder in config["folders"]:
-        dirs.add(os.path.dirname(folder["path"]))
-        used.add(folder["path"].rstrip("/"))
+        fp=folder["path"].rstrip("/")
+        dirs.add(os.path.dirname(fp))
+        used.add(fp)
 
     if options.directories:
         dirs.update(options.directories)
