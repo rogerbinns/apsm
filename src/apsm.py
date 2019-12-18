@@ -293,8 +293,13 @@ def cli_orphans(options):
     for folder in sorted(dirs):
         for d in os.listdir(folder):
             dd = opj(folder, d)
-            if os.path.isdir(opj(dd, ".stfolder")) and not dd in used:
-                print(dd)
+            if os.path.isdir(dd):
+                if dd in used:
+                    continue
+            if os.path.isdir(opj(dd, ".stfolder")):
+                print(" ", dd)
+            else:
+                print("?", dd)
 
 
 def cli_update(options):
