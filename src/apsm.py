@@ -224,14 +224,13 @@ def cli_rename(options):
             continue
         print(label, folder["id"], path)
         existing_folder = os.path.dirname(path)
-        res = ask_folder(path)
-        if res == path:
+        res = ask_folder(opj(existing_folder, label))
+        if not res or res == path:
             continue
         newfolder = os.path.dirname(res)
         if existing_folder != newfolder:
             print(f"  !!! Folder changed to { newfolder }")
-        check = input(f"Confirm rename to { res }? Y/n ").strip()
-        if check != "Y":
+        if not ask_yes_no(f"Confirm rename to { res }"):
             print("Not doing rename")
             continue
 
@@ -464,6 +463,8 @@ def get_update(options, config, target, myid, tilde):
                 continue
             print(f"Adding folder { label } with { len(syncs) } devices")
             path = ask_folder(opj(tilde, label), tilde, label)
+            if not path:
+                continue
             actions.append(
                 f"Add folder { label } id { id } at { path } ({ len(syncs) } devices)"
             )
@@ -559,9 +560,11 @@ def ask_folder(value, basedir=None, label=None):
     label = label or os.path.basename(value)
 
     while True:
-        res = input(f"[{ value }] ? ").strip()
+        res = input(f"[{ value }] ? [Ok:return Cancel:Nn Alt:type] ").strip()
         if not res:
             return value
+        if res in "nN":
+            return None
         if '/' not in res:
             value = opj(basedir, res)
             continue
