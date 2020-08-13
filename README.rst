@@ -84,42 +84,76 @@ Find orphan folders
 
     Checks the containing directories you currently use plus any
     on the command line to find subfolders with .stfolder in them
-    but are not referenced by the syncthing config.
+    but are not referenced by the syncthing config.  Other folders
+    are listed with ? prefix.
 
     When a syncthing folder is removed, the disk folder is left in
-    place.  This way you can find them.
+    place.  This way you can find and delete them.
 
 Running
 =======
 
-python3 & script
+You need Python 3, and the single apsm.py file.  Invoke apsm.py with
+`--help` to get full option details.  There are multiple sub-commands
+and relevant options.
 
 --loglevel
 ----------
 
+Use `--loglevel DEBUG` to see the full details of what is going on.
+Log messages go to stderr.
+
 --backup-directory
 -------------------
+
+Before making any change, a copy of the current configuration is saved
+in JSON format to this directory.  The filename includes the device id
+and a timestamp.  Use `--help` to see the default location.
 
 api keys file
 -------------
 
+In order to talk to syncthing an `API key
+<https://docs.syncthing.net/dev/rest.html>`__ is needed which can be
+found in the syncthing xml config file, or in the web gui in Actions >
+Advanced.
+
+You need to create a file with api keys listed.  Blank lines and
+comments starting with # are ignored.  Each api key is tried in order
+until one works.
+
+
 endpoints
 ---------
+
+This is an ip address and port number, and is the same address you
+enter in your browser to access the syncthing gui.  The most common
+value is `127.0.0.1:8384'.  The tool works with multiple endpoints, so
+you can make more available using ssh port forwarding or similar.
 
 Commands
 ========
 
 import 
+------
+
+
 
 update
+-------
 
 verify
+-------
 
 rename
+------
 
 orphans
+-------
 
 restore
+-------
 
 backup
+------
 
