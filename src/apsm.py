@@ -552,7 +552,7 @@ def run(cmd, **kwargs):
 
 def ask_yes_no(question, default=False):
     r = input(f"{ question } y/N? ")
-    return True if r.strip() == "Y" else default
+    return True if r.strip().upper() == "Y" else default
 
 
 def ask_folder(value, basedir=None, label=None):
