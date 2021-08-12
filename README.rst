@@ -6,7 +6,7 @@ Purpose
 
 APSM is a primarily interactive tool for managing groups of syncthing
 servers. Syncthing does not have central servers to configure, and
-instead each syncthing must be separately configured.  For example
+instead each syncthing instance must be separately configured.  For example
 adding a device or folders requires configuring each syncthing,
 although features like introducers and auto-accept can help.
 
@@ -30,7 +30,7 @@ and other information.
   }
 
 With this file, APSM will update each syncthing you run against.  They
-do not have to all be done at the same time.
+do not have to all be online or done at the same time.
 
 * Updates device list and names
 * Adds or removes folders
