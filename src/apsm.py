@@ -315,6 +315,12 @@ def cli_update(options):
         print("==== Processing", name_from_id(target, status["myID"]))
 
         tilde = status["tilde"]
+        if "defaultFolderPath" not in config["options"]:
+            print(
+                "!!! defaultFolderPath not present in config - enter manually now"
+            )
+            config["options"]["defaultFolderPath"] = input(
+                "Default Folder Path > ").strip()
         defpath = config["options"]["defaultFolderPath"].replace("~", tilde)
         actions, new_config = get_update(options, config, target,
                                          status["myID"], defpath)
