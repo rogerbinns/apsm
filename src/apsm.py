@@ -315,13 +315,15 @@ def cli_update(options):
         print("==== Processing", name_from_id(target, status["myID"]))
 
         tilde = status["tilde"]
-        if "defaultFolderPath" not in config["options"]:
-            print(
-                "!!! defaultFolderPath not present in config - enter manually now"
-            )
-            config["options"]["defaultFolderPath"] = input(
-                "Default Folder Path > ").strip()
-        defpath = config["options"]["defaultFolderPath"].replace("~", tilde)
+        try:
+            defpath = config["defaults"]["folder"]["path"]
+        except KeyError:
+            try:
+                defpath = config["options"]["defaultFolderPath"]
+            except KeyError:
+                raise Exception("Can't find default folder path")
+
+        defpath = defpath.replace("~", tilde)
         actions, new_config = get_update(options, config, target,
                                          status["myID"], defpath)
         if new_config and new_config != config:
